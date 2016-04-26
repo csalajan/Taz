@@ -1,5 +1,3 @@
-// test.cpp : Defines the entry point for the console application.
-//
 #include <iostream>
 #include "stdafx.h"
 #include "table_printer.h"
@@ -75,7 +73,8 @@ std::string GetRamTemp() {
 std::string GetCpuTemp() {
 	LONG temp;
 	GetCpuTemperature(&temp);
-	return ConvertToString((temp / 10 - 273.15)) + "\370";
+	return ConvertToString((temp - 273.15)) + "\370";
+	
 }
 
 std::string ConvertToString(double num) {
@@ -126,23 +125,23 @@ HRESULT GetCpuTemperature(LPLONG pTemperature) {
 		return E_INVALIDARG;
 
 	*pTemperature = -1;
-	HRESULT ci = CoInitialize(NULL); // needs comdef.h
-	HRESULT hr = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE, NULL);
+	HRESULT ci = CoInitialize(NULL);
+	HRESULT hr = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_NONE, RPC_C_IMP_LEVEL_DELEGATE, NULL, EOAC_NONE, NULL);
 	if (SUCCEEDED(hr))
 	{
-		IWbemLocator *pLocator; // needs Wbemidl.h & Wbemuuid.lib
+		IWbemLocator *pLocator;
 		hr = CoCreateInstance(CLSID_WbemAdministrativeLocator, NULL, CLSCTX_INPROC_SERVER, IID_IWbemLocator, (LPVOID*)&pLocator);
 		if (SUCCEEDED(hr))
 		{
 			IWbemServices *pServices;
-			BSTR ns = SysAllocString(L"root\\WMI");
+			BSTR ns = SysAllocString(L"root\\CIMV2");
 			hr = pLocator->ConnectServer(ns, NULL, NULL, NULL, 0, NULL, NULL, &pServices);
 			pLocator->Release();
 			SysFreeString(ns);
 			if (SUCCEEDED(hr))
 			{
-				BSTR query = SysAllocString(L"SELECT * FROM MSAcpi_ThermalZoneTemperature");
-				BSTR wql = SysAllocString(L"WQL");
+				BSTR query = bstr_t(L"SELECT * FROM Win32_PerfFormattedData_Counters_ThermalZoneInformation");
+				BSTR wql = bstr_t(L"WQL");
 				IEnumWbemClassObject *pEnum;
 				hr = pServices->ExecQuery(wql, query, WBEM_FLAG_RETURN_IMMEDIATELY | WBEM_FLAG_FORWARD_ONLY, NULL, &pEnum);
 				SysFreeString(wql);
@@ -156,7 +155,7 @@ HRESULT GetCpuTemperature(LPLONG pTemperature) {
 					pEnum->Release();
 					if (SUCCEEDED(hr))
 					{
-						BSTR temp = SysAllocString(L"CurrentTemperature");
+						BSTR temp = SysAllocString(L"Temperature");
 						VARIANT v;
 						VariantInit(&v);
 						hr = pObject->Get(temp, 0, &v, NULL, NULL);

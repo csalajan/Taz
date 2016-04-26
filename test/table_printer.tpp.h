@@ -25,8 +25,7 @@ namespace bprinter {
 		}
 	}
 #else
-	template<typename T> void TablePrinter::OutputDecimalNumber(T input) {
-		// If we cannot handle this number, indicate so
+	template<typename T> void TablePrinter::OutputDecimalNumber(T input) {		
 		if (input < 10 * (column_widths_.at(j_) - 1) || input > 10 * column_widths_.at(j_)) {
 			std::stringstream string_out;
 			string_out << std::setiosflags(std::ios::fixed)
@@ -42,21 +41,19 @@ namespace bprinter {
 		}
 		else {
 
-			// determine what precision we need
-			int precision = column_widths_.at(j_) - 1; // leave room for the decimal point
+			int precision = column_widths_.at(j_) - 1;
 			if (input < 0)
-				--precision; // leave room for the minus sign
+				--precision;
 
-							 // leave room for digits before the decimal?
 			if (input < -1 || input > 1) {
 				int num_digits_before_decimal = 1 + (int)log10(std::abs(input));
 				precision -= num_digits_before_decimal;
 			}
 			else
-				precision--; // e.g. 0.12345 or -0.1234
+				precision--; 
 
 			if (precision < 0)
-				precision = 0; // don't go negative with precision
+				precision = 0;
 
 			*out_stream_ << std::setiosflags(std::ios::fixed)
 				<< std::setprecision(precision)
@@ -74,5 +71,5 @@ namespace bprinter {
 			j_ = j_ + 1;
 		}
 	}
-#endif //USE_BOOST_KARMA
+#endif
 }
