@@ -16,10 +16,16 @@ std::string GetCpuUsage();
 std::string GetRamTemp();
 std::string GetCpuTemp();
 std::string ConvertToString(LONG num);
+std::string ConvertToString(float num);
+std::string ConvertToString(double num);
 
 void buildTable();
 
 HRESULT GetCpuTemperature(LPLONG pTemperature);
+
+static float CalculateCPULoad(unsigned long long idleTicks, unsigned long long totalTicks);
+static unsigned long long FileTimeToInt64(const FILETIME & ft);
+float GetCPULoad();
 
 using bprinter::TablePrinter;
 int main()
@@ -49,11 +55,17 @@ void buildTable() {
 }
 
 std::string GetRamUsage() {
-	return "5%";
+	MEMORYSTATUSEX memStat;
+	memStat.dwLength = sizeof(memStat);
+	GlobalMemoryStatusEx(&memStat);
+
+	LONG memUsage = memStat.dwMemoryLoad;
+	return ConvertToString(memUsage) + "%";
 }
 
 std::string GetCpuUsage() {
-	return "10%";
+	
+	return ConvertToString(GetCPULoad()) + "%";
 }
 
 std::string GetRamTemp() {
@@ -63,7 +75,19 @@ std::string GetRamTemp() {
 std::string GetCpuTemp() {
 	LONG temp;
 	GetCpuTemperature(&temp);
-	return ConvertToString(temp) + "\370";
+	return ConvertToString((temp / 10 - 273.15)) + "\370";
+}
+
+std::string ConvertToString(double num) {
+	std::stringstream ss;
+	ss << num;
+	return ss.str();
+}
+
+std::string ConvertToString(float num) {
+	std::stringstream ss;
+	ss << num;
+	return ss.str();
 }
 
 std::string ConvertToString(LONG num) {
@@ -72,17 +96,41 @@ std::string ConvertToString(LONG num) {
 	return ss.str();
 }
 
+static float CalculateCPULoad(unsigned long long idleTicks, unsigned long long totalTicks)
+{
+	static unsigned long long _previousTotalTicks = 0;
+	static unsigned long long _previousIdleTicks = 0;
+
+	unsigned long long totalTicksSinceLastTime = totalTicks - _previousTotalTicks;
+	unsigned long long idleTicksSinceLastTime = idleTicks - _previousIdleTicks;
+
+	float ret = 1.0f - ((totalTicksSinceLastTime > 0) ? ((float)idleTicksSinceLastTime) / totalTicksSinceLastTime : 0);
+
+	_previousTotalTicks = totalTicks;
+	_previousIdleTicks = idleTicks;
+	return ret;
+}
+
+static unsigned long long FileTimeToInt64(const FILETIME & ft) { return (((unsigned long long)(ft.dwHighDateTime)) << 32) | ((unsigned long long)ft.dwLowDateTime); }
+
+
+float GetCPULoad()
+{
+	FILETIME idleTime, kernelTime, userTime;
+	float cpuLoad = GetSystemTimes(&idleTime, &kernelTime, &userTime) ? CalculateCPULoad(FileTimeToInt64(idleTime), FileTimeToInt64(kernelTime) + FileTimeToInt64(userTime)) : -1.0f;
+	return floor(cpuLoad * 100);
+}
 
 HRESULT GetCpuTemperature(LPLONG pTemperature) {
 	if (pTemperature == NULL)
 		return E_INVALIDARG;
 
 	*pTemperature = -1;
-	HRESULT ci = CoInitialize(NULL);
-	HRESULT hr = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE, NULL);
+	HRESULT ci = CoInitialize(NULL); // needs comdef.h
+	HRESULT hr = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_DELEGATE, NULL, EOAC_NONE, NULL);
 	if (SUCCEEDED(hr))
 	{
-		IWbemLocator *pLocator;
+		IWbemLocator *pLocator; // needs Wbemidl.h & Wbemuuid.lib
 		hr = CoCreateInstance(CLSID_WbemAdministrativeLocator, NULL, CLSCTX_INPROC_SERVER, IID_IWbemLocator, (LPVOID*)&pLocator);
 		if (SUCCEEDED(hr))
 		{
@@ -93,7 +141,7 @@ HRESULT GetCpuTemperature(LPLONG pTemperature) {
 			SysFreeString(ns);
 			if (SUCCEEDED(hr))
 			{
-				BSTR query = SysAllocString(L"SELECT * FROM CIM_TemperatureSensor");
+				BSTR query = SysAllocString(L"SELECT * FROM MSAcpi_ThermalZoneTemperature");
 				BSTR wql = SysAllocString(L"WQL");
 				IEnumWbemClassObject *pEnum;
 				hr = pServices->ExecQuery(wql, query, WBEM_FLAG_RETURN_IMMEDIATELY | WBEM_FLAG_FORWARD_ONLY, NULL, &pEnum);
@@ -108,7 +156,7 @@ HRESULT GetCpuTemperature(LPLONG pTemperature) {
 					pEnum->Release();
 					if (SUCCEEDED(hr))
 					{
-						BSTR temp = SysAllocString(L"CurrentReading");
+						BSTR temp = SysAllocString(L"CurrentTemperature");
 						VARIANT v;
 						VariantInit(&v);
 						hr = pObject->Get(temp, 0, &v, NULL, NULL);
