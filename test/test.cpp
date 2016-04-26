@@ -127,7 +127,7 @@ HRESULT GetCpuTemperature(LPLONG pTemperature) {
 
 	*pTemperature = -1;
 	HRESULT ci = CoInitialize(NULL); // needs comdef.h
-	HRESULT hr = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_DELEGATE, NULL, EOAC_NONE, NULL);
+	HRESULT hr = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE, NULL);
 	if (SUCCEEDED(hr))
 	{
 		IWbemLocator *pLocator; // needs Wbemidl.h & Wbemuuid.lib
